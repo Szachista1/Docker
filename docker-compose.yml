@@ -1,0 +1,69 @@
+version: '3.8'
+
+services:
+  # Baza Master
+  mysql_master:
+    image: mysql:8.0
+    container_name: mysql_master
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASS}
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASS}
+    volumes:
+      - master_data:/var/lib/mysql
+    networks:
+      - cloud_net
+
+  # Baza Slave
+  mysql_slave:
+    image: mysql:8.0
+    container_name: mysql_slave
+    restart: always
+    depends_on:
+      - mysql_master
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASS}
+    volumes:
+      - slave_data:/var/lib/mysql
+    networks:
+      - cloud_net
+    command: --server-id=2 --log-bin=mysql-bin --relay-log=mysql-relay-bin --read-only=1
+
+  # WordPress
+  wordpress:
+    image: wordpress:latest
+    container_name: wordpress_app
+    restart: always
+    ports:
+      - "8080:80"  # Port 80 = dostęp przez WWW bez wpisywania portu
+    environment:
+      WORDPRESS_DB_HOST: mysql_master
+      WORDPRESS_DB_USER: ${DB_USER}
+      WORDPRESS_DB_PASSWORD: ${DB_PASS}
+      WORDPRESS_DB_NAME: ${DB_NAME}
+    volumes:
+      - wp_data:/var/www/html
+      - ./custom-wp-config.php:/var/www/html/wp-config.php
+    networks:
+      - cloud_net
+
+  # Twój Python Manager
+  db_manager:
+    image: python:3.9-slim
+    container_name: db_manager
+    working_dir: /app
+    volumes:
+      - ./manager.py:/app/manager.py
+    command: sh -c "pip install mysql-connector-python && tail -f /dev/null"
+    networks:
+      - cloud_net
+
+volumes:
+  master_data:
+  slave_data:
+  wp_data:
+
+networks:
+  cloud_net:
